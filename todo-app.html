@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>原生JS 待办事项应用</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .fade-enter-active,
+        .fade-leave-active {
+            transition: opacity 0.5s ease;
+        }
+
+        .fade-enter-from,
+        .fade-leave-to {
+            opacity: 0;
+        }
+
+        .task-completed {
+            text-decoration: line-through;
+            color: #9ca3af;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div id="app" class="container mx-auto px-4 py-8 max-w-2xl">
+        <!-- 头部 -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">
+                <i class="fas fa-tasks text-blue-500 mr-3"></i>
+                原生JS 待办事项
+            </h1>
+            <p class="text-gray-600">使用原生JavaScript实现</p>
+        </header>
+
+        <!-- 添加任务表单 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <form id="taskForm" class="flex gap-3">
+                <input type="text" id="newTaskInput" placeholder="输入新任务..."
+                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required>
+                <button type="submit"
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition duration-200 flex items-center gap-2">
+                    <i class="fas fa-plus"></i>
+                    添加
+                </button>
+            </form>
+        </div>
+
+        <!-- 任务统计 -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-4 text-center">
+                <div id="totalTasks" class="text-2xl font-bold text-blue-500">0</div>
+                <div class="text-gray-600 text-sm">总任务</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 text-center">
+                <div id="completedTasks" class="text-2xl font-bold text-green-500">0</div>
+                <div class="text-gray-600 text-sm">已完成</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 text-center">
+                <div id="pendingTasks" class="text-2xl font-bold text-orange-500">0</div>
+                <div class="text-gray-600 text-sm">待完成</div>
+            </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-gray-800">任务列表</h2>
+                <div class="flex gap-2">
+                    <button id="filterAll" class="px-3 py-1 rounded transition duration-200 text-sm bg-blue-500 text-white">
+                        全部
+                    </button>
+                    <button id="filterActive" class="px-3 py-1 rounded transition duration-200 text-sm bg-gray-200 text-gray-700">
+                        进行中
+                    </button>
+                    <button id="filterCompleted" class="px-3 py-1 rounded transition duration-200 text-sm bg-gray-200 text-gray-700">
+                        已完成
+                    </button>
+                </div>
+            </div>
+
+            <!-- 任务项容器 -->
+            <div id="taskList" class="divide-y divide-gray-100">
+                <!-- 任务项将在这里动态添加 -->
+            </div>
+
+            <!-- 空状态 -->
+            <div id="emptyState" class="p-8 text-center text-gray-500 hidden">
+                <i class="fas fa-inbox text-4xl mb-3"></i>
+                <p>暂无任务</p>
+            </div>
+        </div>
+
+        <!-- 批量操作 -->
+        <div id="batchActions" class="flex justify-between mt-6 hidden">
+            <button id="clearCompleted"
+                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center gap-2">
+                <i class="fas fa-broom"></i>
+                清除已完成
+            </button>
+            <button id="markAllCompleted"
+                class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center gap-2">
+                <i class="fas fa-check-double"></i>
+                全部完成
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 应用状态
+        const state = {
+            tasks: [],
+            filter: 'all',
+            newTask: ''
+        };
+
+        // DOM元素引用
+        const elements = {
+            taskForm: document.getElementById('taskForm'),
+            newTaskInput: document.getElementById('newTaskInput'),
+            taskList: document.getElementById('taskList'),
+            emptyState: document.getElementById('emptyState'),
+            totalTasks: document.getElementById('totalTasks'),
+            completedTasks: document.getElementById('completedTasks'),
+            pendingTasks: document.getElementById('pendingTasks'),
+            batchActions: document.getElementById('batchActions'),
+            filterAll: document.getElementById('filterAll'),
+            filterActive: document.getElementById('filterActive'),
+            filterCompleted: document.getElementById('filterCompleted'),
+            clearCompleted: document.getElementById('clearCompleted'),
+            markAllCompleted: document.getElementById('markAllCompleted')
+        };
+
+        // 初始化应用
+        function initApp() {
+            loadTasks();
+            render();
+            setupEventListeners();
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 表单提交事件
+            elements.taskForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                addTask();
+            });
+
+            // 过滤器按钮事件
+            elements.filterAll.addEventListener('click', () => {
+                state.filter = 'all';
+                updateFilterButtons();
+                renderTaskList();
+            });
+
+            elements.filterActive.addEventListener('click', () => {
+                state.filter = 'active';
+                updateFilterButtons();
+                renderTaskList();
+            });
+
+            elements.filterCompleted.addEventListener('click', () => {
+                state.filter = 'completed';
+                updateFilterButtons();
+                renderTaskList();
+            });
+
+            // 批量操作按钮事件
+            elements.clearCompleted.addEventListener('click', clearCompleted);
+            elements.markAllCompleted.addEventListener('click', markAllCompleted);
+        }
+
+        // 更新过滤器按钮样式
+        function updateFilterButtons() {
+            // 重置所有按钮样式
+            elements.filterAll.className = 'px-3 py-1 rounded transition duration-200 text-sm bg-gray-200 text-gray-700';
+            elements.filterActive.className = 'px-3 py-1 rounded transition duration-200 text-sm bg-gray-200 text-gray-700';
+            elements.filterCompleted.className = 'px-3 py-1 rounded transition duration-200 text-sm bg-gray-200 text-gray-700';
+
+            // 根据当前过滤器设置活动按钮样式
+            switch(state.filter) {
+                case 'all':
+                    elements.filterAll.className = 'px-3 py-1 rounded transition duration-200 text-sm bg-blue-500 text-white';
+                    break;
+                case 'active':
+                    elements.filterActive.className = 'px-3 py-1 rounded transition duration-200 text-sm bg-blue-500 text-white';
+                    break;
+                case 'completed':
+                    elements.filterCompleted.className = 'px-3 py-1 rounded transition duration-200 text-sm bg-blue-500 text-white';
+                    break;
+            }
+        }
+
+        // 添加任务
+        function addTask() {
+            const text = elements.newTaskInput.value.trim();
+            if (text) {
+                state.tasks.push({
+                    id: Date.now(),
+                    text: text,
+                    completed: false,
+                    createdAt: new Date()
+                });
+                elements.newTaskInput.value = '';
+                saveTasks();
+                render();
+            }
+        }
+
+        // 删除任务
+        function deleteTask(id) {
+            state.tasks = state.tasks.filter(task => task.id !== id);
+            saveTasks();
+            render();
+        }
+
+        // 更新任务状态
+        function updateTask(id, completed) {
+            const task = state.tasks.find(task => task.id === id);
+            if (task) {
+                task.completed = completed;
+                saveTasks();
+                render();
+            }
+        }
+
+        // 清除已完成任务
+        function clearCompleted() {
+            state.tasks = state.tasks.filter(task => !task.completed);
+            saveTasks();
+            render();
+        }
+
+        // 标记所有任务为完成
+        function markAllCompleted() {
+            state.tasks.forEach(task => task.completed = true);
+            saveTasks();
+            render();
+        }
+
+        // 格式化日期
+        function formatDate(date) {
+            return new Date(date).toLocaleString('zh-CN');
+        }
+
+        // 持久化存储
+        function saveTasks() {
+            localStorage.setItem('js-tasks', JSON.stringify(state.tasks));
+        }
+
+        // 加载任务
+        function loadTasks() {
+            const saved = localStorage.getItem('js-tasks');
+            if (saved) {
+                state.tasks = JSON.parse(saved);
+                // 转换日期字符串为Date对象
+                state.tasks.forEach(task => {
+                    task.createdAt = new Date(task.createdAt);
+                });
+            }
+        }
+
+        // 渲染应用
+        function render() {
+            renderStats();
+            renderTaskList();
+            renderBatchActions();
+        }
+
+        // 渲染统计数据
+        function renderStats() {
+            elements.totalTasks.textContent = state.tasks.length;
+            elements.completedTasks.textContent = state.tasks.filter(task => task.completed).length;
+            elements.pendingTasks.textContent = state.tasks.filter(task => !task.completed).length;
+        }
+
+        // 渲染任务列表
+        function renderTaskList() {
+            // 根据过滤器筛选任务
+            let filteredTasks = [];
+            switch(state.filter) {
+                case 'active':
+                    filteredTasks = state.tasks.filter(task => !task.completed);
+                    break;
+                case 'completed':
+                    filteredTasks = state.tasks.filter(task => task.completed);
+                    break;
+                default:
+                    filteredTasks = [...state.tasks];
+            }
+
+            // 显示/隐藏空状态
+            if (filteredTasks.length === 0) {
+                elements.emptyState.classList.remove('hidden');
+                elements.taskList.innerHTML = '';
+                return;
+            }
+
+            elements.emptyState.classList.add('hidden');
+
+            // 渲染任务项
+            elements.taskList.innerHTML = '';
+            filteredTasks.forEach(task => {
+                const taskElement = document.createElement('div');
+                taskElement.className = 'p-4 hover:bg-gray-50 transition duration-200';
+                taskElement.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3 flex-1">
+                            <input type="checkbox" ${task.completed ? 'checked' : ''} 
+                                class="w-5 h-5 text-blue-500 rounded focus:ring-blue-400" 
+                                data-id="${task.id}">
+                            <span class="${task.completed ? 'task-completed' : ''} text-gray-800 flex-1">
+                                ${task.text}
+                            </span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium ${
+                                    task.completed 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-yellow-100 text-yellow-800'
+                                }">
+                                ${task.completed ? '已完成' : '进行中'}
+                            </span>
+                        </div>
+                        <button class="text-red-500 hover:text-red-700 transition duration-200 ml-4" 
+                            data-id="${task.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-2 ml-8">
+                        创建时间: ${formatDate(task.createdAt)}
+                    </div>
+                `;
+                elements.taskList.appendChild(taskElement);
+            });
+
+            // 为新添加的元素绑定事件
+            elements.taskList.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    updateTask(id, e.target.checked);
+                });
+            });
+
+            elements.taskList.querySelectorAll('button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const id = parseInt(e.target.closest('button').dataset.id);
+                    deleteTask(id);
+                });
+            });
+        }
+
+        // 渲染批量操作按钮
+        function renderBatchActions() {
+            if (state.tasks.length > 0) {
+                elements.batchActions.classList.remove('hidden');
+            } else {
+                elements.batchActions.classList.add('hidden');
+            }
+        }
+
+        // 页面加载完成后初始化应用
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+
+</html>
