@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue3 待办事项应用</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .fade-enter-active,
+        .fade-leave-active {
+            transition: opacity 0.5s ease;
+        }
+
+        .fade-enter-from,
+        .fade-leave-to {
+            opacity: 0;
+        }
+
+        .task-completed {
+            text-decoration: line-through;
+            color: #9ca3af;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div id="app" class="container mx-auto px-4 py-8 max-w-2xl">
+        <!-- 头部 -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">
+                <i class="fas fa-tasks text-blue-500 mr-3"></i>
+                Vue3 待办事项
+            </h1>
+            <p class="text-gray-600">使用Vue 3 Composition API构建</p>
+        </header>
+
+        <!-- 添加任务表单 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <form @submit.prevent="addTask" class="flex gap-3">
+                <input v-model="newTask" type="text" placeholder="输入新任务..."
+                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required>
+                <button type="submit"
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition duration-200 flex items-center gap-2">
+                    <i class="fas fa-plus"></i>
+                    添加
+                </button>
+            </form>
+        </div>
+
+        <!-- 任务统计 -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow p-4 text-center">
+                <div class="text-2xl font-bold text-blue-500">{{ totalTasks }}</div>
+                <div class="text-gray-600 text-sm">总任务</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 text-center">
+                <div class="text-2xl font-bold text-green-500">{{ completedTasks }}</div>
+                <div class="text-gray-600 text-sm">已完成</div>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 text-center">
+                <div class="text-2xl font-bold text-orange-500">{{ pendingTasks }}</div>
+                <div class="text-gray-600 text-sm">待完成</div>
+            </div>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-gray-800">任务列表</h2>
+                <div class="flex gap-2">
+                    <button @click="filter = 'all'"
+                        :class="{'bg-blue-500 text-white': filter === 'all', 'bg-gray-200 text-gray-700': filter !== 'all'}"
+                        class="px-3 py-1 rounded transition duration-200 text-sm">
+                        全部
+                    </button>
+                    <button @click="filter = 'active'"
+                        :class="{'bg-blue-500 text-white': filter === 'active', 'bg-gray-200 text-gray-700': filter !== 'active'}"
+                        class="px-3 py-1 rounded transition duration-200 text-sm">
+                        进行中
+                    </button>
+                    <button @click="filter = 'completed'"
+                        :class="{'bg-blue-500 text-white': filter === 'completed', 'bg-gray-200 text-gray-700': filter !== 'completed'}"
+                        class="px-3 py-1 rounded transition duration-200 text-sm">
+                        已完成
+                    </button>
+                </div>
+            </div>
+
+            <!-- 任务项 -->
+            <transition-group name="fade" tag="div">
+                <!-- 
+                     Vue处理v-for的过程:
+                     1. 解析模板 - 识别v-for指令及表达式"task in filteredTasks"
+                     2. 编译阶段 - 将模板编译为渲染函数(render function)
+                     3. 响应式追踪 - 追踪filteredTasks的变化
+                     4. 渲染执行 - 当filteredTasks变化时，重新执行渲染函数
+                     5. 虚拟DOM diff - 比较新旧虚拟DOM树差异
+                     6. 实际DOM更新 - 只更新变化的部分
+                -->
+                <div v-for="task in filteredTasks" :key="task.id"
+                    class="p-4 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition duration-200">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3 flex-1">
+                            <input type="checkbox" v-model="task.completed" @change="updateTask(task)"
+                                class="w-5 h-5 text-blue-500 rounded focus:ring-blue-400">
+                            <span :class="{'task-completed': task.completed}" class="text-gray-800 flex-1">
+                                {{ task.text }}
+                            </span>
+                            <span
+                                :class="{'bg-green-100 text-green-800': task.completed, 'bg-yellow-100 text-yellow-800': !task.completed}"
+                                class="px-2 py-1 rounded-full text-xs font-medium">
+                                {{ task.completed ? '已完成' : '进行中' }}
+                            </span>
+                        </div>
+                        <button @click="deleteTask(task.id)"
+                            class="text-red-500 hover:text-red-700 transition duration-200 ml-4">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-2 ml-8">
+                        创建时间: {{ formatDate(task.createdAt) }}
+                    </div>
+                </div>
+            </transition-group>
+
+            <!-- 空状态 -->
+            <div v-if="filteredTasks.length === 0" class="p-8 text-center text-gray-500">
+                <i class="fas fa-inbox text-4xl mb-3"></i>
+                <p>暂无任务</p>
+            </div>
+        </div>
+
+        <!-- 批量操作 -->
+        <div v-if="tasks.length > 0" class="flex justify-between mt-6">
+            <button @click="clearCompleted"
+                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center gap-2">
+                <i class="fas fa-broom"></i>
+                清除已完成
+            </button>
+            <button @click="markAllCompleted"
+                class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center gap-2">
+                <i class="fas fa-check-double"></i>
+                全部完成
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // 响应式数据
+                const tasks = ref([]);
+                const newTask = ref('');
+                const filter = ref('all');
+
+                // 计算属性
+                const totalTasks = computed(() => tasks.value.length);
+                const completedTasks = computed(() => tasks.value.filter(task => task.completed).length);
+                const pendingTasks = computed(() => tasks.value.filter(task => !task.completed).length);
+
+                // Vue处理computed属性的过程:
+                // 1. 创建副作用函数(effect)来追踪依赖
+                // 2. 当tasks.value变化时，自动重新计算filteredTasks的值
+                // 3. 利用缓存机制避免不必要的重复计算
+                const filteredTasks = computed(() => {
+                    switch (filter.value) {
+                        case 'active':
+                            return tasks.value.filter(task => !task.completed);
+                        case 'completed':
+                            return tasks.value.filter(task => task.completed);
+                        default:
+                            return tasks.value;
+                    }
+                });
+
+                // 方法
+                const addTask = () => {
+                    if (newTask.value.trim()) {
+                        tasks.value.push({
+                            id: Date.now(),
+                            text: newTask.value.trim(),
+                            completed: false,
+                            createdAt: new Date()
+                        });
+                        newTask.value = '';
+                        saveTasks();
+                    }
+                };
+
+                const deleteTask = (id) => {
+                    tasks.value = tasks.value.filter(task => task.id !== id);
+                    saveTasks();
+                };
+
+                const updateTask = (task) => {
+                    saveTasks();
+                };
+
+                const clearCompleted = () => {
+                    tasks.value = tasks.value.filter(task => !task.completed);
+                    saveTasks();
+                };
+
+                const markAllCompleted = () => {
+                    tasks.value.forEach(task => task.completed = true);
+                    saveTasks();
+                };
+
+                const formatDate = (date) => {
+                    return new Date(date).toLocaleString('zh-CN');
+                };
+
+                // 持久化存储
+                const saveTasks = () => {
+                    localStorage.setItem('vue3-tasks', JSON.stringify(tasks.value));
+                };
+
+                const loadTasks = () => {
+                    const saved = localStorage.getItem('vue3-tasks');
+                    if (saved) {
+                        tasks.value = JSON.parse(saved);
+                    }
+                };
+
+                // 生命周期
+                onMounted(() => {
+                    loadTasks();
+                });
+
+                return {
+                    tasks,
+                    newTask,
+                    filter,
+                    totalTasks,
+                    completedTasks,
+                    pendingTasks,
+                    filteredTasks,
+                    addTask,
+                    deleteTask,
+                    updateTask,
+                    clearCompleted,
+                    markAllCompleted,
+                    formatDate
+                };
+            }
+        }).mount('#app');
+        
+        /*
+         * Vue运行时编译说明:
+         * 
+         * 虽然我们直接在浏览器中打开这个HTML文件，但Vue内部仍然执行了编译过程:
+         * 1. Vue接收到模板字符串(HTML中的指令)
+         * 2. 内部编译器将模板编译成渲染函数
+         * 3. 渲染函数生成虚拟DOM
+         * 4. 虚拟DOM对比后更新真实DOM
+         * 
+         * 如果使用构建工具(如Vite/Webpack)，这个编译步骤会在构建时完成，
+         * 但是在直接引入Vue CDN的情况下，编译发生在运行时。
+         * 
+         * Vue处理模板到DOM更新的完整流程:
+         * 1. 模板解析: 解析HTML模板，识别Vue指令(v-for, v-model等)
+         * 2. 编译阶段: 将模板编译为渲染函数(在构建时或运行时)
+         * 3. 响应式系统: 建立数据依赖关系，追踪数据变化
+         * 4. 渲染函数执行: 数据变化时执行渲染函数生成新的虚拟DOM
+         * 5. 虚拟DOM Diff: 比较新旧虚拟DOM找出最小变更
+         * 6. DOM更新: 应用变更到实际DOM元素
+         */
+    </script>
+</body>
+
+</html>
